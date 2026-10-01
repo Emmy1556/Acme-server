@@ -27,6 +27,13 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   } else if (err?.code === 11000) {
     status = 409;
     message = `${Object.keys(err.keyValue ?? {}).join(", ") || "Value"} already exists`;
+  } else if (
+    err?.name === "MaxRetriesPerRequestError" ||
+    /enableOfflineQueue|Connection is closed/.test(err?.message ?? "")
+  ) {
+    // Redis dropped mid-request (sessions / rate limits live there)
+    status = 503;
+    message = "Service temporarily unavailable, please try again shortly";
   } else if (err instanceof multer.MulterError) {
     status = 400;
     message = err.message;

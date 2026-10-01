@@ -1,11 +1,14 @@
 import { z } from "zod";
 
 const schema = z.object({
-  NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+  NODE_ENV: z
+    .enum(["development", "production", "test"])
+    .default("development"),
   PORT: z.coerce.number().default(5000),
-  CLIENT_URL: z.string().default("http://localhost:5173"),
+  CLIENT_URL: z.string().default("http://localhost:5174"),
   MONGO_URI: z.string().min(1),
-  REDIS_URL: z.string().default("redis://localhost:6379"),
+  /** Leave empty in development to use the in-memory fallback. */
+  REDIS_URL: z.string().default(""),
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
   JWT_ACCESS_EXPIRES: z.string().default("15m"),
@@ -23,20 +26,29 @@ const schema = z.object({
 
 const parsed = schema.safeParse(process.env);
 if (!parsed.success) {
-  console.error("❌ Invalid environment variables:", z.flattenError(parsed.error).fieldErrors);
+  console.error(
+    "❌ Invalid environment variables:",
+    z.flattenError(parsed.error).fieldErrors,
+  );
   process.exit(1);
 }
 
 export const env = parsed.data;
 
 if (env.NODE_ENV === "production") {
-  const weak = (["JWT_ACCESS_SECRET", "JWT_REFRESH_SECRET"] as const).filter((k) => env[k].includes("change-me"));
+  const weak = (["JWT_ACCESS_SECRET", "JWT_REFRESH_SECRET"] as const).filter(
+    (k) => env[k].includes("change-me"),
+  );
   if (weak.length) {
-    console.error(`❌ Refusing to start: ${weak.join(", ")} still use the example value. Generate real secrets.`);
+    console.error(
+      `❌ Refusing to start: ${weak.join(", ")} still use the example value. Generate real secrets.`,
+    );
     process.exit(1);
   }
   if (env.JWT_ACCESS_SECRET === env.JWT_REFRESH_SECRET) {
-    console.error("❌ Refusing to start: access and refresh secrets must be different.");
+    console.error(
+      "❌ Refusing to start: access and refresh secrets must be different.",
+    );
     process.exit(1);
   }
 }

@@ -5,7 +5,7 @@ import morgan from "morgan";
 import cookieParser from "cookie-parser";
 import mongoose from "mongoose";
 import { env, isProd } from "./config/env";
-import { redis } from "./config/redis";
+import { kv } from "./config/redis";
 import { UPLOAD_DIR } from "./middleware/upload";
 import { errorHandler, notFound } from "./middleware/error";
 
@@ -33,7 +33,7 @@ app.get("/api/health", (_req, res) => {
     data: {
       status: "ok",
       mongo: mongoose.connection.readyState === 1 ? "up" : "down",
-      redis: redis.status === "ready" ? "up" : "down",
+      redis: kv.backend === "memory" ? "memory-fallback" : kv.ready() ? "up" : "down",
       uptime: Math.round(process.uptime()),
     },
   });

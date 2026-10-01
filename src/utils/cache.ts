@@ -1,4 +1,4 @@
-import { redis } from "../config/redis";
+import { kv } from "../config/redis";
 
 /**
  * Namespaced cache with version-based invalidation.
@@ -6,13 +6,13 @@ import { redis } from "../config/redis";
  * so we never need to SCAN/DEL on writes.
  */
 async function version(ns: string) {
-  return (await redis.get(`v:${ns}`)) ?? "1";
+  return (await kv.get(`v:${ns}`)) ?? "1";
 }
 
 export const cache = {
   async get<T>(ns: string, key: string): Promise<T | null> {
     try {
-      const raw = await redis.get(`c:${ns}:${await version(ns)}:${key}`);
+      const raw = await kv.get(`c:${ns}:${await version(ns)}:${key}`);
       return raw ? (JSON.parse(raw) as T) : null;
     } catch {
       return null; // cache is best-effort
@@ -20,14 +20,14 @@ export const cache = {
   },
   async set(ns: string, key: string, value: unknown, ttlSeconds = 300) {
     try {
-      await redis.set(`c:${ns}:${await version(ns)}:${key}`, JSON.stringify(value), "EX", ttlSeconds);
+      await kv.set(`c:${ns}:${await version(ns)}:${key}`, JSON.stringify(value), ttlSeconds);
     } catch {
       /* ignore */
     }
   },
   async invalidate(ns: string) {
     try {
-      await redis.incr(`v:${ns}`);
+      await kv.incr(`v:${ns}`);
     } catch {
       /* ignore */
     }
