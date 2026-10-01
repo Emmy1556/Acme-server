@@ -1,16 +1,12 @@
 import { app } from "./app";
 import { env } from "./config/env";
 import { connectDB } from "./config/db";
-import { connectRedis, redis } from "./config/redis";
+import { connectRedis, kv } from "./config/redis";
 import mongoose from "mongoose";
 
 async function main() {
   await connectDB();
-  await connectRedis().catch((err) => {
-    // Redis powers caching, rate limiting and refresh tokens. Without it,
-    // caching/rate limiting degrade gracefully but login sessions will fail.
-    console.warn("⚠️  Redis unavailable:", err.message);
-  });
+  await connectRedis(); // falls back to memory in development, throws in production
 
   const server = app.listen(env.PORT, () => {
     console.log(`🚀 API running on http://localhost:${env.PORT}/api`);
@@ -19,7 +15,7 @@ async function main() {
   const shutdown = async (signal: string) => {
     console.log(`\n${signal} received, shutting down...`);
     server.close();
-    await Promise.allSettled([mongoose.disconnect(), redis.quit()]);
+    await Promise.allSettled([mongoose.disconnect(), kv.close()]);
     process.exit(0);
   };
   process.on("SIGINT", () => shutdown("SIGINT"));

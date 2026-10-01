@@ -7,7 +7,7 @@ Frontend lives in a separate repo: **acme-frontend**.
 
 ## Run locally
 
-Needs **Bun** (installs/scripts), **Node ≥ 22.9** (runtime), MongoDB and Redis.
+Needs **Bun** (installs/scripts), **Node ≥ 22.9** (runtime), MongoDB, and Redis (optional in development — see below).
 
 ```bash
 docker compose up -d          # MongoDB + Redis (or use local installs / Atlas / Upstash)
@@ -16,6 +16,18 @@ cp .env.example .env          # set real JWT secrets
 bun run seed                  # admin + demo agent + sample listings  (--fresh to reset)
 bun run dev                   # http://localhost:5000/api
 ```
+
+### Redis on Windows
+
+Redis doesn't ship for Windows, so pick one — or skip it: in development the API falls back to an
+in-memory store automatically (you'll see a ⚠️ warning; sessions just reset when the server restarts).
+
+- **Docker Desktop:** `docker compose up -d` (also starts MongoDB).
+- **WSL:** `sudo apt install redis-server && sudo service redis-server start` — WSL forwards `localhost:6379` to Windows.
+- **Memurai:** a Redis-compatible Windows service (free Developer edition), runs on `localhost:6379`.
+- **Upstash:** free hosted Redis — set `REDIS_URL=rediss://default:<password>@<host>:6379`.
+
+`GET /api/health` shows `"redis": "up"`, `"down"` or `"memory-fallback"`.
 
 | Script | What it does |
 |---|---|
