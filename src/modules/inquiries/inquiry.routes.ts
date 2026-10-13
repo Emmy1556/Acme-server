@@ -19,20 +19,21 @@ const createSchema = z.object({
   property: objectId.optional(),
 });
 
-/** POST /inquiries — public: contact form or "enquire about this property" */
+/**
+ * POST /inquiries — public: contact form or "enquire about this property".
+ * Every enquiry lands in Acme's inbox, never the agent's, so a sale, lease or
+ * rent can't be arranged behind the company.
+ */
 router.post(
   "/",
   rateLimit({ name: "inquiry", max: 10, windowSeconds: 60 * 60 }),
   validate({ body: createSchema }),
   async (_req: Request, res: Response) => {
     const body = res.locals.body as z.infer<typeof createSchema>;
-    let recipient;
-    if (body.property) {
-      const property = await Property.findById(body.property).select("owner");
-      if (!property) throw ApiError.notFound("Property not found");
-      recipient = property.owner;
+    if (body.property && !(await Property.exists({ _id: body.property }))) {
+      throw ApiError.notFound("Property not found");
     }
-    const inquiry = await Inquiry.create({ ...body, recipient });
+    const inquiry = await Inquiry.create(body); // no recipient: Acme handles every enquiry
     res.status(201).json({ success: true, data: { id: inquiry._id }, message: "Message sent. We'll get back to you shortly." });
   },
 );
@@ -43,11 +44,10 @@ const listQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
-/** GET /inquiries — agents see enquiries on their listings; admin sees everything */
-router.get("/", protect, authorize("agent", "admin"), validate({ query: listQuery }), async (req: Request, res: Response) => {
+/** GET /inquiries — admin only: enquiries are Acme's, not the agent's */
+router.get("/", protect, authorize("admin"), validate({ query: listQuery }), async (_req: Request, res: Response) => {
   const { status, page, limit } = res.locals.query as z.infer<typeof listQuery>;
   const filter: Record<string, unknown> = {};
-  if (req.user!.role === "agent") filter.recipient = req.user!.id;
   if (status) filter.status = status;
   const [items, total] = await Promise.all([
     Inquiry.find(filter)
@@ -65,12 +65,11 @@ router.get("/", protect, authorize("agent", "admin"), validate({ query: listQuer
 router.patch(
   "/:id",
   protect,
-  authorize("agent", "admin"),
+  authorize("admin"),
   validate({ params: z.object({ id: objectId }), body: z.object({ status: z.enum(["new", "read", "closed"]) }) }),
-  async (req: Request, res: Response) => {
+  async (_req: Request, res: Response) => {
     const inquiry = await Inquiry.findById(res.locals.params.id);
     if (!inquiry) throw ApiError.notFound("Inquiry not found");
-    if (req.user!.role === "agent" && inquiry.recipient?.toString() !== req.user!.id) throw ApiError.forbidden();
     inquiry.status = res.locals.body.status;
     await inquiry.save();
     res.json({ success: true, data: inquiry });

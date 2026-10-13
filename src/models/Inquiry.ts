@@ -9,7 +9,10 @@ const inquirySchema = new Schema(
     subject: { type: String, trim: true },
     message: { type: String, required: true, maxlength: 3000 },
     property: { type: Schema.Types.ObjectId, ref: "Property" },
-    /** Who should see it: the listing's owner, or admin for general contact */
+    /**
+     * Unused today: every enquiry goes to Acme's admin inbox so deals can't be
+     * arranged with an agent directly. Kept for a future "assigned to" feature.
+     */
     recipient: { type: Schema.Types.ObjectId, ref: "User" },
     status: { type: String, enum: ["new", "read", "closed"], default: "new" },
   },

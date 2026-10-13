@@ -29,14 +29,15 @@ router.get("/admin", authorize("admin"), async (_req: Request, res: Response) =>
   res.json({ success: true, data: { listings, users, agents, newInquiries } });
 });
 
-/** GET /stats/agent */
+/** GET /stats/agent — counts only; enquiry details belong to Acme */
 router.get("/agent", authorize("agent", "admin"), async (req: Request, res: Response) => {
   const owner = new Types.ObjectId(req.user!.id);
-  const [listings, newInquiries] = await Promise.all([
+  const myPropertyIds = await Property.find({ owner }).distinct("_id");
+  const [listings, inquiries] = await Promise.all([
     listingBreakdown({ owner }),
-    Inquiry.countDocuments({ recipient: owner, status: "new" }),
+    Inquiry.countDocuments({ property: { $in: myPropertyIds } }),
   ]);
-  res.json({ success: true, data: { listings, newInquiries } });
+  res.json({ success: true, data: { listings, inquiries } });
 });
 
 export default router;

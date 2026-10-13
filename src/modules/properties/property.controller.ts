@@ -1,5 +1,7 @@
 import type { Request, Response } from "express";
+import { Types } from "mongoose";
 import { Property } from "../../models/Property";
+import { Inquiry } from "../../models/Inquiry";
 import { ApiError } from "../../utils/ApiError";
 import { cache } from "../../utils/cache";
 import { buildFilter, paginate } from "./property.service";
@@ -40,14 +42,17 @@ export async function locations(_req: Request, res: Response) {
 /** GET /properties/:slug — public detail (owners/admin can preview unapproved) */
 export async function getBySlug(req: Request, res: Response) {
   const { slug } = res.locals.params;
-  const property = await Property.findOne({ slug }).populate("owner", "name agency phone email avatar isVerified");
+  // Owner is never populated here: the public page contacts Acme, not the agent.
+  const property = await Property.findOne({ slug });
   if (!property) throw ApiError.notFound("Property not found");
 
-  const ownerId = (property.owner as unknown as { _id: { toString(): string } })._id.toString();
+  const ownerId = property.owner.toString();
   const canPreview = req.user && (req.user.role === "admin" || req.user.id === ownerId);
   if (property.status !== "approved" && !canPreview) throw ApiError.notFound("Property not found");
 
   if (!canPreview) await Property.updateOne({ _id: property._id }, { $inc: { views: 1 } });
+
+  const { owner: _owner, ...publicProperty } = property.toJSON();
 
   const similar = await Property.find({
     ...PUBLIC,
@@ -59,20 +64,28 @@ export async function getBySlug(req: Request, res: Response) {
     .select("title slug price pricePeriod listingType category location images bedrooms bathrooms size landUse titleDocument")
     .lean();
 
-  res.json({ success: true, data: { property, similar } });
+  res.json({ success: true, data: { property: publicProperty, similar } });
 }
 
 /** GET /properties/mine — agent/admin's own listings, any status */
 export async function mine(req: Request, res: Response) {
   const q = res.locals.query as ListQuery;
   const data = await paginate(buildFilter(q, { owner: req.user!.id }), q);
-  res.json({ success: true, data });
+  // Agents see how much interest a listing drew, but never who asked —
+  // every enquiry goes to Acme.
+  const counts = await Inquiry.aggregate<{ _id: Types.ObjectId; count: number }>([
+    { $match: { property: { $in: data.items.map((p) => p._id) } } },
+    { $group: { _id: "$property", count: { $sum: 1 } } },
+  ]);
+  const byProperty = new Map(counts.map((c) => [c._id.toString(), c.count]));
+  const items = data.items.map((p) => ({ ...p, inquiryCount: byProperty.get(p._id.toString()) ?? 0 }));
+  res.json({ success: true, data: { ...data, items } });
 }
 
 /** GET /properties/admin — admin: every listing, filter by status */
 export async function adminList(_req: Request, res: Response) {
   const q = res.locals.query as ListQuery;
-  const data = await paginate(buildFilter(q), q);
+  const data = await paginate(buildFilter(q), q, { withOwner: true });
   res.json({ success: true, data });
 }
 

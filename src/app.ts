@@ -33,7 +33,12 @@ app.get("/api/health", (_req, res) => {
     data: {
       status: "ok",
       mongo: mongoose.connection.readyState === 1 ? "up" : "down",
-      redis: kv.backend === "memory" ? "memory-fallback" : kv.ready() ? "up" : "down",
+      redis:
+        kv.backend === "memory"
+          ? "memory-fallback"
+          : kv.ready()
+            ? "up"
+            : "down",
       uptime: Math.round(process.uptime()),
     },
   });

@@ -47,7 +47,12 @@ Seeded logins: `admin@acmehomes.com / Admin@12345`, `agent@acmehomes.com / Agent
 - **Listing workflow:** agent posts → `pending` → admin approves or rejects (reason required). Editing sends it back to `pending`. Admin posts are live immediately; admins can feature listings for the home page.
 - **Auth:** 15-min access JWT (client keeps it in memory) + rotating refresh token in an httpOnly cookie, tracked in Redis. Deactivating a user, changing their role or changing a password revokes all their sessions immediately.
 - **Redis:** refresh tokens + revocation, versioned cache for public listing queries, rate limiting on auth and enquiries.
-- **Uploads:** `POST /api/uploads` writes to `./uploads` (dev only — see Deploying).
+- **Uploads:** `POST /api/uploads` writes to `./uploads` (dev only — see Deploying). Every photo is resized
+  (max 1600px), converted to WebP and stamped with the Acme badge in the bottom-right corner before it is
+  saved — no un-watermarked copy is ever stored. The badge is drawn in `src/utils/watermark.ts`.
+- **All contact goes through Acme:** public responses never include the agent's name, phone or email, and every
+  enquiry lands in the admin inbox. Agents see how many enquiries each listing attracted, never who sent them,
+  so a sale, lease or rent can't be arranged behind the company.
 
 ## Deploying
 
@@ -56,7 +61,7 @@ Seeded logins: `admin@acmehomes.com / Admin@12345`, `agent@acmehomes.com / Agent
    - best: `acmehomes.com` (frontend) + `api.acmehomes.com` (API) → `COOKIE_SAMESITE=lax`, or
    - proxy `/api` through the frontend host (see acme-frontend `vercel.json`) → `lax`.
    - different sites (e.g. `*.vercel.app` + `*.onrender.com`) → `COOKIE_SAMESITE=none`; works in Chrome but Safari blocks third-party cookies, so users get logged out on refresh.
-3. **Images:** most hosts have an ephemeral disk — uploads vanish on redeploy. Move `src/middleware/upload.ts` to Cloudinary/S3 before launch.
+3. **Images:** most hosts have an ephemeral disk — uploads vanish on redeploy. Move `src/middleware/upload.ts` to Cloudinary/S3 before launch (keep the `watermark()` call — watermark first, then upload).
 4. Run behind HTTPS. `trust proxy` is set to 1 hop.
 
 ## API (`/api`)
@@ -71,9 +76,9 @@ Seeded logins: `admin@acmehomes.com / Admin@12345`, `agent@acmehomes.com / Agent
 | POST · PATCH · DELETE | `/properties` · `/properties/:id` | owner or admin |
 | GET | `/properties/admin?status=` | admin |
 | PATCH | `/properties/:id/status` · `/properties/:id/feature` | admin |
-| POST | `/uploads` (multipart `images`, ≤10 × 5 MB) | agent, admin |
+| POST | `/uploads` (multipart `images`, ≤10 × 8 MB, watermarked) | agent, admin |
 | POST | `/inquiries` | public (rate limited) |
-| GET · PATCH | `/inquiries` · `/inquiries/:id` | agent (own), admin |
+| GET · PATCH | `/inquiries` · `/inquiries/:id` | admin |
 | GET · PATCH · DELETE | `/users` · `/users/:id` | admin |
 | GET | `/stats/agent` · `/stats/admin` | agent · admin |
 | GET | `/health` | public |

@@ -36,14 +36,24 @@ export function buildFilter(q: Partial<ListQuery>, extra: QueryFilter<IProperty>
   return filter;
 }
 
-export async function paginate(filter: QueryFilter<IProperty>, q: Pick<ListQuery, "page" | "limit" | "sort">) {
+/**
+ * `withOwner` is for dashboards only. Public responses never carry the agent's
+ * details — buyers contact Acme, not the agent (see docs in the README).
+ */
+export async function paginate(
+  filter: QueryFilter<IProperty>,
+  q: Pick<ListQuery, "page" | "limit" | "sort">,
+  { withOwner = false } = {},
+) {
+  const query = Property.find(filter)
+    .sort(SORTS[q.sort])
+    .skip((q.page - 1) * q.limit)
+    .limit(q.limit);
+  if (withOwner) query.populate("owner", "name agency phone email avatar isVerified");
+  else query.select("-owner");
+
   const [items, total] = await Promise.all([
-    Property.find(filter)
-      .sort(SORTS[q.sort])
-      .skip((q.page - 1) * q.limit)
-      .limit(q.limit)
-      .populate("owner", "name agency phone email avatar isVerified")
-      .lean(),
+    query.lean(),
     Property.countDocuments(filter),
   ]);
   return {
