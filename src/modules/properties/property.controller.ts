@@ -4,6 +4,7 @@ import { Property } from "../../models/Property";
 import { Inquiry } from "../../models/Inquiry";
 import { ApiError } from "../../utils/ApiError";
 import { cache } from "../../utils/cache";
+import { deleteImages } from "../../utils/storage";
 import { buildFilter, paginate } from "./property.service";
 import { crossFieldIssues, type ListQuery } from "./property.schema";
 
@@ -101,6 +102,23 @@ export async function create(req: Request, res: Response) {
   res.status(201).json({ success: true, data: property });
 }
 
+/**
+ * Deletes stored photos that no listing uses any more. The URL is checked against
+ * every property, so copying another listing's photo URL and then deleting your own
+ * listing can't remove someone else's image. Runs in the background.
+ */
+function releaseImages(urls: string[]) {
+  if (!urls.length) return;
+  void (async () => {
+    const stillUsed = new Set(
+      (await Property.find({ "images.url": { $in: urls } }).select("images.url").lean()).flatMap((p) =>
+        p.images.map((i) => i.url),
+      ),
+    );
+    await deleteImages(urls.filter((u) => !stillUsed.has(u)));
+  })().catch((err) => console.error("Image cleanup failed:", err));
+}
+
 async function findOwned(req: Request, id: string) {
   const property = await Property.findById(id);
   if (!property) throw ApiError.notFound("Property not found");
@@ -111,6 +129,7 @@ async function findOwned(req: Request, id: string) {
 /** PATCH /properties/:id — edits by agents send the listing back for review */
 export async function update(req: Request, res: Response) {
   const property = await findOwned(req, res.locals.params.id);
+  const oldUrls = property.images.map((i) => i.url);
   property.set(res.locals.body);
   const issues = crossFieldIssues(property);
   if (issues.length) {
@@ -122,14 +141,18 @@ export async function update(req: Request, res: Response) {
   }
   await property.save();
   await cache.invalidate(NS);
+  const kept = new Set(property.images.map((i) => i.url));
+  releaseImages(oldUrls.filter((u) => !kept.has(u)));
   res.json({ success: true, data: property });
 }
 
 /** DELETE /properties/:id */
 export async function remove(req: Request, res: Response) {
   const property = await findOwned(req, res.locals.params.id);
+  const urls = property.images.map((i) => i.url);
   await property.deleteOne();
   await cache.invalidate(NS);
+  releaseImages(urls);
   res.json({ success: true, message: "Property deleted" });
 }
 

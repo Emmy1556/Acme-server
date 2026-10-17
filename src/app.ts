@@ -6,7 +6,7 @@ import cookieParser from "cookie-parser";
 import mongoose from "mongoose";
 import { env, isProd } from "./config/env";
 import { kv } from "./config/redis";
-import { UPLOAD_DIR } from "./middleware/upload";
+import { UPLOAD_DIR } from "./utils/storage";
 import { errorHandler, notFound } from "./middleware/error";
 
 import authRoutes from "./modules/auth/auth.routes";

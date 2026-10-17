@@ -20,6 +20,14 @@ const schema = z.object({
    */
   COOKIE_SAMESITE: z.enum(["lax", "strict", "none"]).default("lax"),
   COOKIE_DOMAIN: z.string().optional(),
+  /** All three set → photos go to Cloudinary. Leave empty to store them on local disk (dev only). */
+  CLOUDINARY_CLOUD_NAME: z.string().default(""),
+  CLOUDINARY_API_KEY: z.string().default(""),
+  CLOUDINARY_API_SECRET: z.string().default(""),
+  CLOUDINARY_FOLDER: z
+    .string()
+    .regex(/^[\w-]+(\/[\w-]+)*$/, "letters, numbers, - and _ only, folders separated by /")
+    .default("acme-homes"),
   SEED_ADMIN_EMAIL: z.string().default("admin@acmehomes.com"),
   SEED_ADMIN_PASSWORD: z.string().default("Admin@12345"),
 });
@@ -34,6 +42,17 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
+const cloudinaryVars = ["CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"] as const;
+const cloudinarySet = cloudinaryVars.filter((k) => env[k]);
+if (cloudinarySet.length && cloudinarySet.length < cloudinaryVars.length) {
+  console.error(
+    `❌ Cloudinary is half-configured. Set all of ${cloudinaryVars.join(", ")} or none. Missing: ${cloudinaryVars
+      .filter((k) => !env[k])
+      .join(", ")}`,
+  );
+  process.exit(1);
+}
 
 if (env.NODE_ENV === "production") {
   const weak = (["JWT_ACCESS_SECRET", "JWT_REFRESH_SECRET"] as const).filter(

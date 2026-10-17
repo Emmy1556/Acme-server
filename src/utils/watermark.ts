@@ -1,8 +1,14 @@
 import sharp from "sharp";
+import path from "node:path";
+import { readFile } from "node:fs/promises";
 
 /**
  * Stamps every uploaded photo with an Acme badge in the bottom-right corner,
  * normalises orientation/size and converts to WebP.
+ *
+ * TO CHANGE THE WATERMARK: put your logo at `assets/watermark.png` (transparent
+ * background) or `assets/watermark.svg` and restart the server. It is scaled to the
+ * badge size below. With no file there, the built-in badge in `badge()` is used.
  *
  * Kept deliberately simple: one pass to resize (so the badge can be sized
  * relative to the final image), one pass to composite.
@@ -14,6 +20,24 @@ const BADGE_RATIO = 0.3; // badge width relative to the photo width
 const BADGE_MIN = 150;
 const BADGE_MAX = 440;
 const MARGIN_RATIO = 0.022;
+
+/** Checked in this order; the first one that exists wins. Read once, at the first upload. */
+const LOGO_FILES = ["watermark.png", "watermark.svg"].map((f) => path.resolve(process.cwd(), "assets", f));
+
+let logo: Promise<Buffer | null> | undefined;
+function customLogo() {
+  logo ??= (async () => {
+    for (const file of LOGO_FILES) {
+      try {
+        return await readFile(file);
+      } catch {
+        // not there — try the next one
+      }
+    }
+    return null;
+  })();
+  return logo;
+}
 
 export const WATERMARK_FORMAT = { ext: ".webp", contentType: "image/webp" };
 
@@ -67,7 +91,10 @@ export async function watermark(input: Buffer): Promise<Buffer> {
 
   const { width, height } = resized.info;
   const badgeWidth = Math.round(Math.min(BADGE_MAX, Math.max(BADGE_MIN, width * BADGE_RATIO)));
-  const overlay = badge(badgeWidth);
+  const file = await customLogo();
+  const overlay = file
+    ? await sharp(file, { density: 300 }).resize({ width: badgeWidth }).png().toBuffer()
+    : badge(badgeWidth);
   const { height: badgeHeight } = await sharp(overlay).metadata();
   const margin = Math.round(width * MARGIN_RATIO);
 
