@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
-import { Types } from "mongoose";
-import { Property } from "../../models/Property";
+import { Types, type QueryFilter } from "mongoose";
+import { Property, type IProperty } from "../../models/Property";
 import { Inquiry } from "../../models/Inquiry";
 import { ApiError } from "../../utils/ApiError";
 import { cache } from "../../utils/cache";
@@ -9,7 +9,14 @@ import { buildFilter, paginate } from "./property.service";
 import { crossFieldIssues, type ListQuery } from "./property.schema";
 
 const NS = "properties";
-const PUBLIC = { status: "approved", isAvailable: true } as const;
+/**
+ * What the public can see: approved listings that are available OR sold.
+ * Sold ones stay up (with a red badge) as proof of deals closed. Wrapped in $and so a
+ * search's own $or (title/area/city/description) can't overwrite it.
+ */
+const PUBLIC: QueryFilter<IProperty> = { status: "approved", $and: [{ $or: [{ isAvailable: true }, { isSold: true }] }] };
+/** "Similar properties" only suggests things you can still buy or rent. */
+const STILL_AVAILABLE = { status: "approved", isAvailable: true, isSold: false } as const;
 
 /** GET /properties — public, cached search */
 export async function list(_req: Request, res: Response) {
@@ -56,13 +63,13 @@ export async function getBySlug(req: Request, res: Response) {
   const { owner: _owner, ...publicProperty } = property.toJSON();
 
   const similar = await Property.find({
-    ...PUBLIC,
+    ...STILL_AVAILABLE,
     _id: { $ne: property._id },
     category: property.category,
     "location.city": property.location?.city,
   })
     .limit(4)
-    .select("title slug price pricePeriod listingType category location images bedrooms bathrooms size landUse titleDocument")
+    .select("title slug price pricePeriod listingType category location images bedrooms bathrooms size maxSize plots landUse titleDocuments")
     .lean();
 
   res.json({ success: true, data: { property: publicProperty, similar } });
@@ -166,6 +173,38 @@ export async function setStatus(_req: Request, res: Response) {
     { returnDocument: "after" },
   );
   if (!property) throw ApiError.notFound("Property not found");
+  await cache.invalidate(NS);
+  res.json({ success: true, data: property });
+}
+
+/**
+ * PATCH /properties/:id/sold — owner or admin marks a listing sold (or undoes it).
+ * Doesn't send an agent's listing back for review: nothing about the listing itself changed.
+ */
+export async function setSold(req: Request, res: Response) {
+  const property = await findOwned(req, res.locals.params.id);
+  const { isSold } = res.locals.body as { isSold: boolean };
+  // Land with plot sizes: sold = every size sold out (the model works out the rest).
+  for (const plot of property.plots ?? []) plot.isSoldOut = isSold;
+  property.isSold = isSold;
+  property.soldAt = isSold ? (property.soldAt ?? new Date()) : undefined;
+  property.isAvailable = !isSold;
+  await property.save();
+  await cache.invalidate(NS);
+  res.json({ success: true, data: property });
+}
+
+/**
+ * PATCH /properties/:id/plots — owner or admin marks which plot sizes are sold out.
+ * When every size is gone the listing shows as sold automatically. Like /sold, this
+ * doesn't send an agent's listing back for review.
+ */
+export async function setPlotsSoldOut(req: Request, res: Response) {
+  const property = await findOwned(req, res.locals.params.id);
+  if (!property.plots?.length) throw ApiError.badRequest("This listing has no plot sizes");
+  const soldOut = new Set((res.locals.body as { soldOut: string[] }).soldOut);
+  for (const plot of property.plots) plot.isSoldOut = soldOut.has(plot._id.toString());
+  await property.save();
   await cache.invalidate(NS);
   res.json({ success: true, data: property });
 }

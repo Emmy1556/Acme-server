@@ -1,11 +1,13 @@
 import { app } from "./app";
 import { env } from "./config/env";
 import { connectDB } from "./config/db";
+import { runMigrations } from "./migrations";
 import { connectRedis, kv } from "./config/redis";
 import mongoose from "mongoose";
 
 async function main() {
   await connectDB();
+  await runMigrations();
   await connectRedis(); // falls back to memory in development, throws in production
 
   const server = app.listen(env.PORT, () => {

@@ -7,14 +7,15 @@ import { deleteImages } from "../../utils/storage";
 const router = Router();
 
 /**
- * POST /uploads — multipart field "images" (max 10).
- * Every photo is watermarked with the Acme badge before it is stored.
- * Returns [{ url, publicId? }] to attach to a listing.
+ * POST /uploads?category=building|land — multipart field "images" (max 10).
+ * Building photos are watermarked with the Acme logo before they're stored; land
+ * photos are only resized (no watermark). Returns [{ url, publicId? }].
  */
 router.post("/", protect, authorize("agent", "admin"), uploadImages, async (req: Request, res: Response) => {
   const files = (req.files as Express.Multer.File[] | undefined) ?? [];
   if (!files.length) throw ApiError.badRequest("No images uploaded");
-  const results = await Promise.allSettled(files.map((file) => saveWatermarked(file)));
+  const stamp = req.query.category !== "land";
+  const results = await Promise.allSettled(files.map((file) => saveWatermarked(file, { stamp })));
   const stored = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
   const failed = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
   if (failed) {

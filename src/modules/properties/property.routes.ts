@@ -6,6 +6,8 @@ import {
   adminListQuerySchema,
   createPropertySchema,
   featureSchema,
+  soldSchema,
+  plotsSoldOutSchema,
   idParams,
   listQuerySchema,
   slugParams,
@@ -30,6 +32,8 @@ router.patch(
   validate({ params: idParams, body: updatePropertySchema }),
   ctrl.update,
 );
+router.patch("/:id/sold", protect, authorize("agent", "admin"), validate({ params: idParams, body: soldSchema }), ctrl.setSold);
+router.patch("/:id/plots", protect, authorize("agent", "admin"), validate({ params: idParams, body: plotsSoldOutSchema }), ctrl.setPlotsSoldOut);
 router.delete("/:id", protect, authorize("agent", "admin"), validate({ params: idParams }), ctrl.remove);
 
 // ---- admin moderation ----

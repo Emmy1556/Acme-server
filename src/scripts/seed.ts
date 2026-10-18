@@ -86,16 +86,16 @@ async function main() {
   }));
 
   const lands = [
-    { title: "Crownwaters Estate", price: 500_000, size: 600, landUse: "residential", titleDocument: "Registered Survey & Deed of Assignment", location: lagos("Lekki") },
-    { title: "1004sqm Of Dry Land With Good Access Road", price: 5_000_000, size: 1004, landUse: "agricultural", titleDocument: "C of O in View", location: lagos("Imota, Ikorodu") },
-    { title: "Zenytal Gardens", price: 1_000_000, size: 500, landUse: "residential", titleDocument: "C of O in View", location: { area: "Odeda", city: "Abeokuta", state: "Ogun" } },
-    { title: "Fortune Garden Estate Okpanam", price: 5_000_000, size: 500, landUse: "commercial", titleDocument: "C of O in View", location: { area: "Okpanam", city: "Asaba", state: "Delta" } },
-    { title: "Riverside Commercial Plot", price: 45_000_000, size: 500, landUse: "commercial", titleDocument: "Family Receipt", location: lagos("Imota, Ikorodu") },
+    { title: "Crownwaters Estate", price: 500_000, size: 600, landUse: "residential", titleDocuments: ["Registered Survey & Deed of Assignment"], location: lagos("Lekki") },
+    { title: "1004sqm Of Dry Land With Good Access Road", price: 5_000_000, size: 1004, landUse: "agricultural", titleDocuments: ["C of O in View"], location: lagos("Imota, Ikorodu") },
+    { title: "Zenytal Gardens", price: 1_000_000, size: 500, landUse: "residential", titleDocuments: ["C of O in View"], location: { area: "Odeda", city: "Abeokuta", state: "Ogun" } },
+    { title: "Fortune Garden Estate Okpanam", price: 5_000_000, size: 500, landUse: "commercial", titleDocuments: ["C of O in View"], location: { area: "Okpanam", city: "Asaba", state: "Delta" } },
+    { title: "Riverside Commercial Plot", price: 45_000_000, size: 500, landUse: "commercial", titleDocuments: ["Family Receipt"], location: lagos("Imota, Ikorodu") },
   ].map((l, i) => ({
     ...l,
     category: "land",
     listingType: "sale",
-    description: `${l.size}sqm ${l.landUse} land at ${l.location.area}, ${l.location.city} with ${l.titleDocument}. Dry, accessible and ready for development.`,
+    description: `${l.size}sqm ${l.landUse} land at ${l.location.area}, ${l.location.city} with ${l.titleDocuments.join(" + ")}. Dry, accessible and ready for development.`,
     features: ["Good Access Road", "Dry Land", "Gated"],
     images: [img(LAND_IMGS[i % LAND_IMGS.length]!)],
     isFeatured: true,

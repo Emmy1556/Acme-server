@@ -17,6 +17,8 @@ const createSchema = z.object({
   subject: z.string().trim().max(150).optional(),
   message: z.string().trim().min(5).max(3000),
   property: objectId.optional(),
+  /** A plot size on that property (land with several sizes). */
+  plotId: objectId.optional(),
 });
 
 /**
@@ -29,11 +31,20 @@ router.post(
   rateLimit({ name: "inquiry", max: 10, windowSeconds: 60 * 60 }),
   validate({ body: createSchema }),
   async (_req: Request, res: Response) => {
-    const body = res.locals.body as z.infer<typeof createSchema>;
-    if (body.property && !(await Property.exists({ _id: body.property }))) {
-      throw ApiError.notFound("Property not found");
+    const { plotId, ...body } = res.locals.body as z.infer<typeof createSchema>;
+    let plot: { size: number; price: number; paymentPlan?: string } | undefined;
+    if (body.property) {
+      const property = await Property.findById(body.property).select("isSold plots").lean();
+      if (!property) throw ApiError.notFound("Property not found");
+      if (property.isSold) throw ApiError.badRequest("This property has already been sold");
+      if (plotId) {
+        const found = property.plots?.find((p) => p._id.toString() === plotId);
+        if (!found) throw ApiError.badRequest("That plot size is no longer listed");
+        if (found.isSoldOut) throw ApiError.badRequest(`The ${found.size}sqm plot is sold out`);
+        plot = { size: found.size, price: found.price, paymentPlan: found.paymentPlan ?? undefined };
+      }
     }
-    const inquiry = await Inquiry.create(body); // no recipient: Acme handles every enquiry
+    const inquiry = await Inquiry.create({ ...body, plot }); // no recipient: Acme handles every enquiry
     res.status(201).json({ success: true, data: { id: inquiry._id }, message: "Message sent. We'll get back to you shortly." });
   },
 );

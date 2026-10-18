@@ -2,14 +2,15 @@ import type { QueryFilter, SortOrder } from "mongoose";
 import { Property, type IProperty } from "../../models/Property";
 import type { ListQuery } from "./property.schema";
 
+// Every sort puts properties that are still available before sold ones (isSold: false < true).
 const SORTS: Record<ListQuery["sort"], Record<string, SortOrder>> = {
-  newest: { createdAt: -1 },
-  oldest: { createdAt: 1 },
-  price_asc: { price: 1 },
-  price_desc: { price: -1 },
-  popular: { views: -1 },
+  newest: { isSold: 1, createdAt: -1 },
+  oldest: { isSold: 1, createdAt: 1 },
+  price_asc: { isSold: 1, price: 1 },
+  price_desc: { isSold: 1, price: -1 },
+  popular: { isSold: 1, views: -1 },
   /** Featured first, then newest — used by the home page so new listings show up straight away. */
-  featured: { isFeatured: -1, createdAt: -1 },
+  featured: { isSold: 1, isFeatured: -1, createdAt: -1 },
 };
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -22,14 +23,26 @@ export function buildFilter(q: Partial<ListQuery>, extra: QueryFilter<IProperty>
   if (q.landUse) filter.landUse = q.landUse;
   if (q.status) filter.status = q.status;
   if (q.featured !== undefined) filter.isFeatured = q.featured;
+  if (q.sold !== undefined) filter.isSold = q.sold;
   if (q.city) filter["location.city"] = new RegExp(`^${escape(q.city)}$`, "i");
   if (q.area) filter["location.area"] = new RegExp(escape(q.area), "i");
   if (q.bedrooms !== undefined) filter.bedrooms = { $gte: q.bedrooms };
   if (q.minPrice !== undefined || q.maxPrice !== undefined) {
-    filter.price = {
+    const range = {
       ...(q.minPrice !== undefined ? { $gte: q.minPrice } : {}),
       ...(q.maxPrice !== undefined ? { $lte: q.maxPrice } : {}),
     };
+    // A land listing matches if ANY plot size you can still buy fits the budget.
+    // New array (not push) so a shared `extra.$and` is never mutated.
+    filter.$and = [
+      ...((filter.$and as QueryFilter<IProperty>[] | undefined) ?? []),
+      {
+        $or: [
+          { plots: { $elemMatch: { isSoldOut: { $ne: true }, price: range } } },
+          { "plots.0": { $exists: false }, price: range },
+        ],
+      },
+    ];
   }
   if (q.q) {
     const rx = new RegExp(escape(q.q), "i");

@@ -8,6 +8,7 @@ import {
   PRICE_PERIODS,
   TITLE_DOCUMENTS,
 } from "../../models/Property";
+import { isUnwatermarked } from "../../utils/imageTags";
 
 const objectId = z.string().regex(/^[a-f\d]{24}$/i, "Invalid id");
 
@@ -45,14 +46,36 @@ const base = z.object({
   furnished: z.boolean().optional(),
 
   landUse: z.enum(LAND_USES).optional(),
-  titleDocument: z.enum(TITLE_DOCUMENTS).optional(),
+  plots: z
+    .array(
+      z.object({
+        _id: objectId.optional(),
+        size: z.coerce.number().positive("Plot size must be more than 0").max(100_000_000),
+        price: z.coerce.number().nonnegative(),
+        isSoldOut: z.boolean().optional(),
+        paymentPlan: z.string().trim().max(200).optional(),
+      }),
+    )
+    .max(30, "At most 30 plot sizes")
+    .optional(),
+  titleDocuments: z
+    .array(z.enum(TITLE_DOCUMENTS))
+    .max(TITLE_DOCUMENTS.length)
+    .transform((docs) => [...new Set(docs)])
+    .optional(),
 
   features: z.array(z.string().trim().min(1).max(60)).max(30),
   images: z.array(imageSchema).max(25, "A listing can have at most 25 photos"),
   isAvailable: z.boolean().optional(),
 });
 
-type CrossFields = { category?: string; listingType?: string; landUse?: string | null; bedrooms?: number | null };
+type CrossFields = {
+  category?: string;
+  listingType?: string;
+  landUse?: string | null;
+  bedrooms?: number | null;
+  images?: { url: string }[] | null;
+};
 
 /** Rules that depend on more than one field. Used on create, and on the merged document on update. */
 export function crossFieldIssues(d: CrossFields) {
@@ -63,6 +86,11 @@ export function crossFieldIssues(d: CrossFields) {
     issues.push({ path: "landUse", message: "Land use is required for land listings" });
   if (d.category === "building" && (d.bedrooms === undefined || d.bedrooms === null))
     issues.push({ path: "bedrooms", message: "Bedrooms is required for buildings" });
+  if (d.category === "building" && d.images?.some((i) => isUnwatermarked(i.url)))
+    issues.push({
+      path: "images",
+      message: "Some photos were uploaded for a land listing and have no watermark. Remove them and upload them again.",
+    });
   return issues;
 }
 
@@ -93,6 +121,10 @@ export const listQuerySchema = z.object({
     .enum(["true", "false"])
     .transform((v) => v === "true")
     .optional(),
+  sold: z
+    .enum(["true", "false"])
+    .transform((v) => v === "true")
+    .optional(),
   sort: z.enum(["newest", "oldest", "price_asc", "price_desc", "popular", "featured"]).default("newest"),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(12),
@@ -108,6 +140,9 @@ export const statusSchema = z.object({
 });
 
 export const featureSchema = z.object({ isFeatured: z.boolean() });
+export const soldSchema = z.object({ isSold: z.boolean() });
+/** The ids of the plot sizes that are sold out; every other size becomes available. */
+export const plotsSoldOutSchema = z.object({ soldOut: z.array(objectId).max(30) });
 
 export const idParams = z.object({ id: objectId });
 export const slugParams = z.object({ slug: z.string().min(1).max(200) });

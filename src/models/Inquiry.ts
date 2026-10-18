@@ -9,6 +9,11 @@ const inquirySchema = new Schema(
     subject: { type: String, trim: true },
     message: { type: String, required: true, maxlength: 3000 },
     property: { type: Schema.Types.ObjectId, ref: "Property" },
+    /** Which plot size the enquiry is about — a snapshot, so later price edits don't rewrite history. */
+    plot: {
+      type: new Schema({ size: Number, price: Number, paymentPlan: String }, { _id: false }),
+      default: undefined,
+    },
     /**
      * Unused today: every enquiry goes to Acme's admin inbox so deals can't be
      * arranged with an agent directly. Kept for a future "assigned to" feature.

@@ -1,9 +1,10 @@
 # Watermark logo
 
-Every uploaded listing photo is stamped with a semi-transparent logo in the centre (so cropping on the site can't cut it off).
+Every uploaded listing photo is stamped with `watermark.png` (the Acme logo) in the bottom-right corner,
+on a translucent green plate so the white text stays readable on bright photos.
 
-- To use your own logo, save it here as `watermark.png` (transparent background) or `watermark.svg`, then restart the server.
-- With no file here, the built-in Acme badge from `src/utils/watermark.ts` is used.
-- Position, transparency and size: `POSITION`, `OPACITY`, `BADGE_RATIO`, `BADGE_MIN`, `BADGE_MAX` in `src/utils/watermark.ts`.
+- To change the logo, replace `watermark.png` here (transparent background) — or add `watermark.svg` — then restart the server.
+- Delete the file to fall back to the built-in badge in `src/utils/watermark.ts`.
+- Position, size, transparency and the plate: `POSITION`, `BADGE_RATIO`, `BADGE_MIN`, `BADGE_MAX`, `OPACITY`, `PLATE_OPACITY`, `PLATE_COLOR` in `src/utils/watermark.ts`.
 
-A wide logo (roughly 4:1, like the current badge) works best. Only new uploads get the new watermark — existing photos keep the old one.
+Only new uploads get the new watermark — existing photos keep the one they were uploaded with.

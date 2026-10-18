@@ -6,9 +6,9 @@ import { readFile } from "node:fs/promises";
  * Stamps every uploaded photo with the Acme badge, normalises orientation/size
  * and converts to WebP.
  *
- * The badge sits in the CENTRE by default: the site crops photos to fit its cards
- * and gallery (object-cover), and a corner badge gets cut off on portrait/square
- * photos. A centred mark survives any crop and is also much harder to crop away.
+ * Placed in the bottom-right corner. The site anchors its photo crops to the
+ * bottom-right (object-position) so the badge isn't cut off on cards and galleries.
+ * Set POSITION to "center" for a mark that survives any crop.
  *
  * TO CHANGE THE WATERMARK: put your logo at `assets/watermark.png` (transparent
  * background) or `assets/watermark.svg` and restart the server. It is scaled to the
@@ -21,14 +21,20 @@ import { readFile } from "node:fs/promises";
 /** Longest edge of a stored photo. Keeps uploads small without visible quality loss. */
 const MAX_EDGE = 1600;
 
-/** "center" (default) or "bottom-right". */
-const POSITION: "center" | "bottom-right" = "center";
+/** "bottom-right" (default) or "center". */
+const POSITION = "bottom-right" as "center" | "bottom-right";
 /** 0–1. How see-through the badge is. 1 = solid. */
-const OPACITY = 0.6;
+const OPACITY = 0.95;
 /** Badge width relative to the photo's shorter side, clamped to [BADGE_MIN, BADGE_MAX] px. */
-const BADGE_RATIO = 0.5;
-const BADGE_MIN = 180;
-const BADGE_MAX = 640;
+const BADGE_RATIO = 0.34;
+const BADGE_MIN = 150;
+const BADGE_MAX = 420;
+/**
+ * Puts a custom logo on a translucent brand-green plate so it stays readable on
+ * bright photos (assets/watermark.png has white text). 0 = no plate.
+ */
+const PLATE_OPACITY = 0.6;
+const PLATE_COLOR = "#014433";
 /** Gap from the edges when POSITION is "bottom-right". */
 const MARGIN_RATIO = 0.022;
 
@@ -110,6 +116,39 @@ function fade(png: Buffer, opacity: number) {
     .toBuffer();
 }
 
+/** Scales a custom logo to `width` (padding included) and, if enabled, backs it with a rounded plate. */
+async function onPlate(file: Buffer, width: number, maxHeight: number) {
+  if (!PLATE_OPACITY) {
+    return sharp(file, { density: 300 }).resize({ width, height: maxHeight, fit: "inside" }).png().toBuffer({ resolveWithObject: true });
+  }
+  const pad = Math.round(width * 0.07);
+  const logo = await sharp(file, { density: 300 })
+    .trim() // ignore transparent margins in the file so the padding is even
+    .resize({ width: width - pad * 2, height: Math.max(1, maxHeight - pad * 2), fit: "inside" })
+    .png()
+    .toBuffer({ resolveWithObject: true });
+  const w = logo.info.width + pad * 2;
+  const h = logo.info.height + pad * 2;
+  const plate = Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="${w}" height="${h}" rx="${Math.round(
+      h * 0.16,
+    )}" fill="${PLATE_COLOR}" fill-opacity="${PLATE_OPACITY}"/></svg>`,
+  );
+  return sharp(plate)
+    .composite([{ input: logo.data, top: pad, left: pad }])
+    .png()
+    .toBuffer({ resolveWithObject: true });
+}
+
+/** Rotate, resize and convert to WebP without a watermark (used for land photos). */
+export function prepare(input: Buffer): Promise<Buffer> {
+  return sharp(input, { failOn: "error" })
+    .rotate()
+    .resize({ width: MAX_EDGE, height: MAX_EDGE, fit: "inside", withoutEnlargement: true })
+    .webp({ quality: 82 })
+    .toBuffer();
+}
+
 export async function watermark(input: Buffer): Promise<Buffer> {
   const resized = await sharp(input, { failOn: "error" })
     .rotate() // honour EXIF orientation before we place the badge
@@ -122,10 +161,9 @@ export async function watermark(input: Buffer): Promise<Buffer> {
     Math.round(Math.min(BADGE_MAX, Math.max(BADGE_MIN, Math.min(width, height) * BADGE_RATIO))),
   );
   const file = await customLogo();
-  const rendered = await sharp(file ?? badge(badgeWidth), { density: 300 })
-    .resize({ width: badgeWidth, height, fit: "inside" })
-    .png()
-    .toBuffer({ resolveWithObject: true });
+  const rendered = file
+    ? await onPlate(file, badgeWidth, height)
+    : await sharp(badge(badgeWidth)).png().toBuffer({ resolveWithObject: true });
   const overlay = OPACITY < 1 ? await fade(rendered.data, OPACITY) : rendered.data;
   const { width: w, height: h } = rendered.info;
   const margin = Math.round(width * MARGIN_RATIO);

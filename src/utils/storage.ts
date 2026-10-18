@@ -68,9 +68,16 @@ async function cloudinary(action: "upload" | "destroy", params: Record<string, s
   return body;
 }
 
-/** Stores one finished image. The name is always generated here, never taken from the client. */
-export async function storeImage(data: Buffer, file: { ext: string; contentType: string }): Promise<StoredImage> {
-  const name = `${Date.now()}-${crypto.randomBytes(8).toString("hex")}`;
+/**
+ * Stores one finished image. The name is always generated here, never taken from the client.
+ * `tag` is appended to the name (e.g. UNWATERMARKED_TAG for land photos).
+ */
+export async function storeImage(
+  data: Buffer,
+  file: { ext: string; contentType: string },
+  tag = "",
+): Promise<StoredImage> {
+  const name = `${Date.now()}-${crypto.randomBytes(8).toString("hex")}${tag}`;
 
   if (cloud) {
     const body = await cloudinary(
