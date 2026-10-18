@@ -8,6 +8,8 @@ const SORTS: Record<ListQuery["sort"], Record<string, SortOrder>> = {
   price_asc: { price: 1 },
   price_desc: { price: -1 },
   popular: { views: -1 },
+  /** Featured first, then newest — used by the home page so new listings show up straight away. */
+  featured: { isFeatured: -1, createdAt: -1 },
 };
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

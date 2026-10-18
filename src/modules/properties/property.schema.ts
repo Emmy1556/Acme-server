@@ -48,7 +48,7 @@ const base = z.object({
   titleDocument: z.enum(TITLE_DOCUMENTS).optional(),
 
   features: z.array(z.string().trim().min(1).max(60)).max(30),
-  images: z.array(imageSchema).max(15),
+  images: z.array(imageSchema).max(25, "A listing can have at most 25 photos"),
   isAvailable: z.boolean().optional(),
 });
 
@@ -93,7 +93,7 @@ export const listQuerySchema = z.object({
     .enum(["true", "false"])
     .transform((v) => v === "true")
     .optional(),
-  sort: z.enum(["newest", "oldest", "price_asc", "price_desc", "popular"]).default("newest"),
+  sort: z.enum(["newest", "oldest", "price_asc", "price_desc", "popular", "featured"]).default("newest"),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(12),
 });
