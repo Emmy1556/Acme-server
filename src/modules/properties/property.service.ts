@@ -23,7 +23,7 @@ export function buildFilter(q: Partial<ListQuery>, extra: QueryFilter<IProperty>
   if (q.landUse) filter.landUse = q.landUse;
   if (q.status) filter.status = q.status;
   if (q.featured !== undefined) filter.isFeatured = q.featured;
-  if (q.sold !== undefined) filter.isSold = q.sold;
+  if (q.sold !== undefined) filter.isSold = q.sold ? true : { $ne: true }; // older listings have no isSold field
   if (q.city) filter["location.city"] = new RegExp(`^${escape(q.city)}$`, "i");
   if (q.area) filter["location.area"] = new RegExp(escape(q.area), "i");
   if (q.bedrooms !== undefined) filter.bedrooms = { $gte: q.bedrooms };

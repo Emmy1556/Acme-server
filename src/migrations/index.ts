@@ -17,4 +17,8 @@ export async function runMigrations() {
     { $unset: "titleDocument" },
   ]);
   if (modifiedCount) console.log(`🛠  Migrated ${modifiedCount} listing(s) to multiple title documents`);
+
+  // 2026-10: listings created before the sold feature have no `isSold` field.
+  const sold = await Property.collection.updateMany({ isSold: { $exists: false } }, { $set: { isSold: false } });
+  if (sold.modifiedCount) console.log(`🛠  Set isSold=false on ${sold.modifiedCount} older listing(s)`);
 }

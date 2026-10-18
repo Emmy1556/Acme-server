@@ -16,7 +16,8 @@ const NS = "properties";
  */
 const PUBLIC: QueryFilter<IProperty> = { status: "approved", $and: [{ $or: [{ isAvailable: true }, { isSold: true }] }] };
 /** "Similar properties" only suggests things you can still buy or rent. */
-const STILL_AVAILABLE = { status: "approved", isAvailable: true, isSold: false } as const;
+// `$ne: true`, not `false`: listings created before the sold feature have no isSold field at all.
+const STILL_AVAILABLE = { status: "approved", isAvailable: true, isSold: { $ne: true } } as const;
 
 /** GET /properties — public, cached search */
 export async function list(_req: Request, res: Response) {
